@@ -63,12 +63,19 @@ jobs:
         with:
           cluster_name: taskflow
 
-      - name: Charger les images dans kind et déployer
+      - name: Charger les images dans kind
+        run: kind load docker-image taskflow-api:1.0 taskflow-frontend:1.0 --name taskflow
+
+      - name: Déployer (kubectl apply -k)
+        run: kubectl apply -k k8s/overlays/$ENV
+
+      - name: Attendre PostgreSQL et Redis
         run: |
-          kind load docker-image taskflow-api:1.0 taskflow-frontend:1.0 --name taskflow
-          kubectl apply -k k8s/overlays/$ENV
-          kubectl -n $NS rollout status statefulset/postgres --timeout=180s
+          kubectl -n $NS rollout status statefulset/postgres --timeout=240s
           kubectl -n $NS rollout status deployment/redis --timeout=120s
+
+      - name: Attendre l'API et le frontend
+        run: |
           kubectl -n $NS rollout status deployment/api --timeout=180s
           kubectl -n $NS rollout status deployment/frontend --timeout=120s
           kubectl -n $NS get pods -o wide
@@ -93,9 +100,14 @@ jobs:
       - name: Logs en cas d'échec
         if: failure()
         run: |
-          kubectl -n $NS get all
-          kubectl -n $NS describe pods | tail -n 80
-          kubectl -n $NS logs deployment/api --tail=100 || true
+          # Affichés dans le log et publiés en annotations (visibles sur la page du run)
+          annotate() { echo "::error title=$1::$(sed -e 's/%/%25/g' | tail -n 40 | sed -e ':a;N;$!ba;s/\n/%0A/g')"; }
+          kubectl -n $NS get all -o wide 2>&1 | tee /dev/stderr | annotate "Ressources"
+          kubectl -n $NS get events --sort-by=.lastTimestamp 2>&1 | tee /dev/stderr | annotate "Événements"
+          for d in api frontend redis; do
+            kubectl -n $NS logs deployment/$d --all-containers --tail=40 2>&1 | annotate "Logs $d"
+          done
+          kubectl -n $NS logs statefulset/postgres --tail=40 2>&1 | annotate "Logs postgres"
 
   # 4. Publication des images sur GitHub Container Registry (push sur une branche uniquement)
   publish:
