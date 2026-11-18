@@ -4,11 +4,14 @@ import redis
 from fastapi import FastAPI, Query
 
 app = FastAPI(title="Visits API")
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://app:app@localhost:5432/visits")
+DB_HOST = os.getenv("DB_HOST", "db")
+DB_NAME = os.getenv("POSTGRES_DB", "taskflow")
 APP_VERSION = os.getenv("APP_VERSION", "dev")
 
-r = redis.Redis(host=REDIS_HOST, port=6379, decode_responses=True, socket_connect_timeout=2)
+DB_USER = os.getenv("POSTGRES_USER", "taskflow")
+DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "taskflowpass")
+
+r = redis.Redis(host=DB_HOST, port=6379, decode_responses=True, socket_connect_timeout=2)
 
 CREATE_LOGS = "CREATE TABLE IF NOT EXISTS logs (id SERIAL PRIMARY KEY, at TIMESTAMPTZ DEFAULT now())"
 
@@ -21,7 +24,7 @@ def health():
 @app.get("/")
 def visit():
     count = r.incr("visits")
-    with psycopg.connect(DATABASE_URL) as conn:
+    with psycopg.connect(DB_NAME) as conn:
         conn.execute(CREATE_LOGS)
         conn.execute("INSERT INTO logs DEFAULT VALUES")
     return {"visits": count, "pod": os.getenv("HOSTNAME"), "version": APP_VERSION}
@@ -36,7 +39,7 @@ def visits_count():
 @app.get("/visits")
 def history(limit: int = Query(20, ge=1, le=100)):
     """Dernières visites enregistrées dans PostgreSQL (la plus récente en premier)."""
-    with psycopg.connect(DATABASE_URL) as conn:
+    with psycopg.connect(DB_NAME) as conn:
         conn.execute(CREATE_LOGS)
         rows = conn.execute(
             "SELECT id, at FROM logs ORDER BY id DESC LIMIT %s", (limit,)
@@ -55,7 +58,7 @@ def status():
     except redis.RedisError:
         services["redis"] = "down"
     try:
-        with psycopg.connect(DATABASE_URL, connect_timeout=2) as conn:
+        with psycopg.connect(DB_NAME, connect_timeout=2) as conn:
             conn.execute("SELECT 1")
         services["postgres"] = "ok"
     except psycopg.Error:
