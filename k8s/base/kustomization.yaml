@@ -1,0 +1,5 @@
+resources:
+  - postgres.yaml
+  - backend.yaml
+  - frontend.yaml
+  - services.yaml

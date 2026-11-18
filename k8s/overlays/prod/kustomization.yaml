@@ -1,0 +1,4 @@
+namespace: taskflow-prod
+resources:
+  - namespace.yaml
+  - ../../base

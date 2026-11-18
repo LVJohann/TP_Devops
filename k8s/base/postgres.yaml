@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  namespace: taskflow-dev
+type: Opaque
+stringData:
+  POSTGRES_DB: taskflow
+  POSTGRES_USER: taskflow
+  POSTGRES_PASSWORD: change-me-now
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: taskflow-dev
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: taskflow-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: postgres}
+  template:
+    metadata:
+      labels: {app: postgres}
+    spec:
+      # Pour un dépôt Docker Hub privé, décommenter après création du secret regcred :
+      # imagePullSecrets:
+      #   - name: regcred
+      containers:
+        - name: postgres
+          image: DOCKERHUB_USER/taskflow-database:IMAGE_TAG
+          ports: [{containerPort: 5432}]
+          envFrom:
+            - secretRef: {name: postgres-secret}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: postgres-pvc}
