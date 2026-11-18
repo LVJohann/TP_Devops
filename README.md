@@ -167,4 +167,4 @@ Nettoyer : `kubectl delete namespace visits`
 | `port is already allocated` (8000 ou 8080) | Libérer le port, ou changer le port de gauche dans `compose.yaml` (ex. `"8081:8080"`) |
 | Frontend affiche « API injoignable » / erreur 502 | `docker compose ps` et `docker compose logs api` ; l'API attend que PostgreSQL soit prêt |
 | Redis ou PostgreSQL « Indisponible » | `docker compose logs db cache` ; repartir de zéro avec `docker compose down -v && docker compose up -d --build` |
-| Modification du frontend non visible | `docker compose up -d --build frontend` puis Ctrl+F5 dans le navigateur |
+| Modification du frontend non visible | `docker compose up -d --build frontend` puis Ctrl+F5 dans le navigateur |..
