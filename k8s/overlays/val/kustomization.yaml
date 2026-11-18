@@ -1,0 +1,22 @@
+# Environnement val : kubectl apply -k k8s/overlays/val
+namespace: taskflow-val
+resources:
+  - namespace.yaml
+  - ../../base
+
+configMapGenerator:
+  - name: api-config
+    behavior: merge
+    literals:
+      - APP_VERSION=1.0-val
+
+replicas:
+  - { name: api, count: 1 }
+  - { name: frontend, count: 1 }
+
+patches:
+  - target: { kind: Ingress, name: frontend }
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: val.taskflow.local

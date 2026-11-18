@@ -1,0 +1,119 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main, dev, val, prod]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # 1. Tests unitaires de l'API (sans Redis ni PostgreSQL)
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: app/requirements.txt
+      - run: pip install -r app/requirements.txt pytest httpx
+      - run: python -m pytest -v
+
+  # 2. Validation des manifests Kubernetes (les 3 environnements)
+  manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: kustomize build dev / val / prod
+        run: |
+          for env in dev val prod; do
+            echo "::group::$env"
+            kubectl kustomize k8s/overlays/$env
+            echo "::endgroup::"
+          done
+
+  # 3. Déploiement de bout en bout sur un cluster Kubernetes éphémère (kind) + tests de fumée
+  deploy-kind:
+    needs: [test, manifests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Choisir l'environnement selon la branche
+        run: |
+          case "${GITHUB_REF_NAME}" in
+            dev) ENV=dev ;;
+            prod|main) ENV=prod ;;
+            *) ENV=val ;;
+          esac
+          echo "ENV=$ENV" >> "$GITHUB_ENV"
+          echo "NS=taskflow-$ENV" >> "$GITHUB_ENV"
+
+      - name: Construire les images
+        run: |
+          docker build -t taskflow-api:1.0 .
+          docker build -t taskflow-frontend:1.0 ./frontend
+
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: taskflow
+
+      - name: Charger les images dans kind et déployer
+        run: |
+          kind load docker-image taskflow-api:1.0 taskflow-frontend:1.0 --name taskflow
+          kubectl apply -k k8s/overlays/$ENV
+          kubectl -n $NS rollout status statefulset/postgres --timeout=180s
+          kubectl -n $NS rollout status deployment/redis --timeout=120s
+          kubectl -n $NS rollout status deployment/api --timeout=180s
+          kubectl -n $NS rollout status deployment/frontend --timeout=120s
+          kubectl -n $NS get pods -o wide
+
+      - name: Tests de fumée (via le frontend nginx)
+        run: |
+          kubectl -n $NS port-forward svc/frontend 8080:80 >/dev/null 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:8080/ >/dev/null && break; sleep 2; done
+          set -x
+          curl -sf http://localhost:8080/taskflow.html | grep -q TaskFlow
+          curl -sf http://localhost:8080/api/status | grep -q '"status":"ok"'
+          curl -sf http://localhost:8080/api/ | grep -q '"visits"'
+          curl -sf "http://localhost:8080/api/visits?limit=5" | grep -q '"total"'
+          ID=$(curl -sf -X POST http://localhost:8080/api/tasks -H 'Content-Type: application/json' \
+                 -d '{"title":"Tâche CI","priority":"Haute"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
+          curl -sf -X PATCH http://localhost:8080/api/tasks/$ID -H 'Content-Type: application/json' -d '{"status":"Terminee"}' | grep -q Terminee
+          curl -sf "http://localhost:8080/api/tasks?status=Terminee&q=CI" | grep -q "$ID"
+          curl -sf http://localhost:8080/api/tasks/stats | grep -q '"done":1'
+          curl -sf -o /dev/null -w '%{http_code}' -X DELETE http://localhost:8080/api/tasks/$ID | grep -q 204
+          curl -sf http://localhost:8080/api/activity | grep -q suppression
+
+      - name: Logs en cas d'échec
+        if: failure()
+        run: |
+          kubectl -n $NS get all
+          kubectl -n $NS describe pods | tail -n 80
+          kubectl -n $NS logs deployment/api --tail=100 || true
+
+  # 4. Publication des images sur GitHub Container Registry (push sur une branche uniquement)
+  publish:
+    needs: deploy-kind
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build & push
+        run: |
+          OWNER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          for img in api frontend; do
+            ctx=.; [ "$img" = frontend ] && ctx=./frontend
+            docker build -t ghcr.io/$OWNER/taskflow-$img:${GITHUB_SHA::7} -t ghcr.io/$OWNER/taskflow-$img:${GITHUB_REF_NAME} $ctx
+            docker push --all-tags ghcr.io/$OWNER/taskflow-$img
+          done

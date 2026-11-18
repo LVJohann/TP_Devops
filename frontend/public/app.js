@@ -1,31 +1,5 @@
-// Toutes les requêtes passent par nginx, qui relaie /api/* vers l'API FastAPI.
-const API = "/api";
+// Page « Visites & services » : fonctionnalités 1 à 3 (utilitaires dans common.js).
 const STATUS_REFRESH_MS = 10_000;
-
-const $ = (id) => document.getElementById(id);
-const fmtInt = new Intl.NumberFormat("fr-FR");
-const fmtDate = new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "medium" });
-const fmtRel = new Intl.RelativeTimeFormat("fr", { numeric: "auto" });
-
-async function api(path) {
-  const res = await fetch(API + path, { headers: { Accept: "application/json" }, cache: "no-store" });
-  if (!res.ok) throw new Error(`l'API a répondu ${res.status} ${res.statusText}`);
-  return res.json();
-}
-
-function showError(el, err) {
-  el.textContent = err ? `Erreur : ${err.message}` : "";
-  el.hidden = !err;
-}
-
-function timeAgo(date) {
-  const seconds = Math.round((date - Date.now()) / 1000);
-  const units = [["day", 86400], ["hour", 3600], ["minute", 60]];
-  for (const [unit, size] of units) {
-    if (Math.abs(seconds) >= size) return fmtRel.format(Math.round(seconds / size), unit);
-  }
-  return fmtRel.format(seconds, "second");
-}
 
 /* ---------- 1. Compteur de visites ---------- */
 
@@ -35,19 +9,10 @@ function renderPods() {
   const list = $("pods");
   list.replaceChildren();
   if (podsSeen.size === 0) {
-    const li = document.createElement("li");
-    li.className = "empty";
-    li.textContent = "Aucun pour l'instant";
-    list.append(li);
+    list.append(el("li", { className: "empty", textContent: "Aucun pour l'instant" }));
     return;
   }
-  for (const [pod, hits] of podsSeen) {
-    const li = document.createElement("li");
-    const count = document.createElement("b");
-    count.textContent = `×${hits}`;
-    li.append(pod, count);
-    list.append(li);
-  }
+  for (const [pod, hits] of podsSeen) list.append(el("li", {}, pod, el("b", { textContent: `×${hits}` })));
 }
 
 async function loadCount() {
@@ -89,8 +54,7 @@ async function loadHistory({ highlight = 0 } = {}) {
     $("history-total").textContent = fmtInt.format(data.total);
     body.replaceChildren();
     if (data.items.length === 0) {
-      const tr = body.insertRow();
-      const td = tr.insertCell();
+      const td = body.insertRow().insertCell();
       td.colSpan = 3;
       td.className = "empty";
       td.textContent = "Aucune visite pour l'instant — cliquez sur « Enregistrer une visite ».";
@@ -124,9 +88,10 @@ async function loadStatus() {
   try {
     const data = await api("/status");
     for (const [name, state] of Object.entries(data.services)) setService(name, state);
-    $("version").textContent = `version ${data.version}`;
     overall.className = `overall ${data.status}`;
-    overall.textContent = data.status === "ok" ? "Tous les services sont opérationnels." : "Service dégradé : au moins une dépendance est indisponible.";
+    overall.textContent = data.status === "ok"
+      ? "Tous les services sont opérationnels."
+      : "Service dégradé : au moins une dépendance est indisponible.";
   } catch (err) {
     setService("api", "down");
     setService("redis", "unknown");

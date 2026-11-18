@@ -1,0 +1,21 @@
+# Socle commun aux 3 environnements (dev, val, prod).
+# Le namespace est fixé par chaque overlay : kubectl apply -k k8s/overlays/<env>
+resources:
+  - secret.yaml
+  - postgres.yaml
+  - redis.yaml
+  - api.yaml
+  - frontend.yaml
+  - ingress.yaml
+
+configMapGenerator:
+  - name: api-config
+    literals:
+      - REDIS_HOST=redis
+      - APP_VERSION=1.0
+
+images:
+  - name: taskflow-api
+    newTag: "1.0"
+  - name: taskflow-frontend
+    newTag: "1.0"

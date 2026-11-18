@@ -1,0 +1,16 @@
+# Environnement prod : kubectl apply -k k8s/overlays/prod
+namespace: taskflow-prod
+resources:
+  - namespace.yaml
+  - ../../base
+  - hpa.yaml                           # autoscaling de l'API (metrics-server requis)
+
+configMapGenerator:
+  - name: api-config
+    behavior: merge
+    literals:
+      - APP_VERSION=1.0-prod
+
+replicas:
+  - { name: api, count: 3 }
+  - { name: frontend, count: 2 }

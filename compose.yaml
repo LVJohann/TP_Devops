@@ -1,7 +1,7 @@
 services:
   frontend:
     build: ./frontend              # nginx + fichiers statiques (frontend/)
-    image: visits-frontend:1.0
+    image: taskflow-frontend:1.0
     ports:
       - "8080:8080"                # interface web : http://localhost:8080
     environment:
@@ -14,12 +14,12 @@ services:
 
   api:
     build: .                       # construit depuis le Dockerfile
-    image: visits-api:1.0
+    image: taskflow-api:1.0
     ports:
       - "8000:8000"                # hôte:conteneur
     environment:
       REDIS_HOST: cache
-      DATABASE_URL: postgresql://app:${DB_PASSWORD:-app}@db:5432/visits
+      DATABASE_URL: postgresql://app:${DB_PASSWORD:-app}@db:5432/taskflow
       APP_VERSION: "1.0-compose"
     depends_on:
       db:
@@ -33,11 +33,11 @@ services:
     environment:
       POSTGRES_USER: app
       POSTGRES_PASSWORD: ${DB_PASSWORD:-app}
-      POSTGRES_DB: visits
+      POSTGRES_DB: taskflow
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U app -d visits"]
+      test: ["CMD-SHELL", "pg_isready -U app -d taskflow"]
       interval: 5s
       timeout: 3s
       retries: 10

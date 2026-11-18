@@ -2,10 +2,9 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: api
-  namespace: visits
 spec:
   scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: api }
-  minReplicas: 2
+  minReplicas: 3
   maxReplicas: 8
   metrics:
     - type: Resource
