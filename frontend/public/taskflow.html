@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>TaskFlow</title><link rel="stylesheet" href="taskflow.css">
+</head>
+<body>
+  <main class="container">
+    <header><div><p class="eyebrow">ORGANISATION D'ÉQUIPE</p><h1>TaskFlow</h1><p class="subtitle">Toutes vos tâches, au même endroit.</p></div><span class="badge">MVP</span></header>
+    <section class="panel">
+      <h2>Ajouter une tâche</h2>
+      <form id="task-form">
+        <input id="title" placeholder="Titre de la tâche" maxlength="200" required>
+        <input id="description" placeholder="Description (facultative)">
+        <div class="row"><select id="priority"><option>Normale</option><option>Basse</option><option>Haute</option></select><input id="due-date" type="date"><button type="submit">+ Ajouter</button></div>
+      </form>
+      <p id="message" role="status"></p>
+    </section>
+    <section class="panel"><div class="list-heading"><h2>Mes tâches</h2><button id="refresh" class="secondary">Actualiser</button></div><div id="tasks"><p>Chargement...</p></div></section>
+    <footer>TaskFlow · Frontend + API Flask + PostgreSQL</footer>
+  </main>
+  <script src="taskflow.js"></script>
+</body></html>
