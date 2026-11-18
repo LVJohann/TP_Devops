@@ -77,9 +77,39 @@ kubectl delete -k k8s/overlays/dev           # supprime l'environnement
 
 ## CI/CD (GitHub Actions)
 
-À chaque push sur `main`, `dev`, `val`, `prod` (et sur les pull requests), [.github/workflows/ci-cd.yaml](.github/workflows/ci-cd.yaml) :
+À chaque push sur `main`, `dev`, `val`, `prod` (et sur les pull requests), [.github/workflows/ci-cd.yaml](.github/workflows/ci-cd.yaml) enchaîne 4 jobs :
 
-1. lance les tests `pytest` ;
-2. valide les manifests des 3 environnements (`kubectl kustomize`) ;
-3. déploie l'application sur un cluster Kubernetes éphémère (kind) — overlay `dev` pour la branche `dev`, `prod` pour `main`/`prod`, `val` sinon — et exécute des tests de fumée sur les 9 fonctionnalités ;
-4. publie les images sur `ghcr.io/<owner>/taskflow-api` et `taskflow-frontend` (push uniquement).
+```
+test ──┐
+       ├──> deploy-kind ──> publish
+manifests ┘
+```
+
+| Job | Rôle |
+|---|---|
+| `test` | Tests `pytest` de l'API (sans Redis ni PostgreSQL) |
+| `manifests` | `kubectl kustomize` des overlays `dev`, `val` et `prod` |
+| `deploy-kind` | Build des images, cluster Kubernetes éphémère (kind), `kubectl apply -k`, attente des rollouts, tests de fumée des 9 fonctionnalités via le frontend nginx. Overlay choisi selon la branche : `dev` → dev, `main`/`prod` → prod, sinon val. En cas d'échec, l'état du cluster et les logs des pods sont publiés en annotations sur la page du run. |
+| `publish` | Push des images `ghcr.io/lvjohann/taskflow-api` et `taskflow-frontend` (tags `<sha>` et `<branche>`), uniquement sur push |
+
+### Bilan CI/CD (branche `val`, 18/11/2026)
+
+| Run | Commit | Résultat | Détail |
+|---|---|---|---|
+| [#1](https://github.com/LVJohann/TP_Devops/actions/runs/44291026705) | `c2a39b9` | ❌ échec | `test` et `manifests` OK ; `deploy-kind` en échec, cause non visible (logs détaillés réservés aux membres du dépôt) |
+| [#2](https://github.com/LVJohann/TP_Devops/actions/runs/44294093674) | `fba3df6` | ❌ échec | Ajout du diagnostic en annotations : PostgreSQL, Redis et frontend `Running`, mais l'API en `CrashLoopBackOff` → `ValueError: invalid literal for int(): 'tcp://10.96.188.116:6379'` |
+| [#3](https://github.com/LVJohann/TP_Devops/actions/runs/44295084650) | `18061c0` | ✅ succès | Correctif appliqué, les 4 jobs sont verts |
+
+**Cause de l'échec :** Kubernetes injecte automatiquement dans chaque pod des variables pour les Services du namespace. Pour le Service `redis`, il crée `REDIS_PORT=tcp://<ip>:6379`, ce qui écrasait la variable de port lue par l'API. Le bug était invisible avec Docker Compose et n'est apparu qu'au déploiement Kubernetes.
+**Correctif :** variable renommée en `REDIS_TCP_PORT`, `enableServiceLinks: false` sur le Deployment de l'API, et test de non-régression `test_starts_with_kubernetes_service_links`.
+
+**Run #3 (vert) :**
+
+| Job | Durée | Vérifié |
+|---|---|---|
+| `test` | 34 s | 10 tests `pytest` passent |
+| `manifests` | 8 s | Les 3 overlays (dev, val, prod) se génèrent |
+| `deploy-kind` | 92 s | Namespace `taskflow-val` : PostgreSQL, Redis, API et frontend `Ready` ; via `/api/*` : page TaskFlow servie, `/status` = `ok` (Redis + PostgreSQL joignables), visite enregistrée, historique, création d'une tâche en base, changement de statut, recherche filtrée, statistiques, suppression (204), journal d'activité |
+| `publish` | 36 s | Images publiées sur GHCR |
+
+**Vérifié aussi en local (Docker Compose) :** des tâches ajoutées depuis le frontend sont bien relues directement dans PostgreSQL avec `psql` (tables `tasks` et `activity`), et elles sont toujours là après un redémarrage de PostgreSQL et de l'API (volume persistant).
