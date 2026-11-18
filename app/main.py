@@ -88,3 +88,85 @@ def init_db():
                 raise
             time.sleep(2)
 
+@app.get('/api/health')
+def health():
+    try:
+        with connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT 1')
+        return jsonify(status='ok', database='connected')
+    except Exception as exc:
+        return jsonify(status='error', message=str(exc)), 503
+
+
+@app.get('/api/tasks')
+def list_tasks():
+    with connect() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute('SELECT id, title, description, status, priority, due_date FROM tasks ORDER BY id DESC')
+            rows = cur.fetchall()
+    for row in rows:
+        if row['due_date']:
+            row['due_date'] = row['due_date'].isoformat()
+    return jsonify(rows)
+
+
+@app.post('/api/tasks')
+def create_task():
+    data = request.get_json(silent=True) or {}
+    title = (data.get('title') or '').strip()
+    if not title:
+        return jsonify(error='Le titre est obligatoire'), 400
+    with connect() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute('''INSERT INTO tasks(title, description, status, priority, due_date)
+                           VALUES (%s, %s, %s, %s, %s)
+                           RETURNING id, title, description, status, priority, due_date''',
+                        (title, data.get('description', ''), data.get('status', 'A faire'),
+                         data.get('priority', 'Normale'), data.get('due_date') or None))
+            row = cur.fetchone()
+    if row['due_date']:
+        row['due_date'] = row['due_date'].isoformat()
+    return jsonify(row), 201
+
+
+@app.put('/api/tasks/<int:task_id>')
+def update_task(task_id):
+    data = request.get_json(silent=True) or {}
+    allowed_status = {'A faire', 'En cours', 'Terminee'}
+    allowed_priority = {'Basse', 'Normale', 'Haute'}
+    status = data.get('status')
+    priority = data.get('priority')
+    if status is not None and status not in allowed_status:
+        return jsonify(error='Statut invalide'), 400
+    if priority is not None and priority not in allowed_priority:
+        return jsonify(error='Priorite invalide'), 400
+    with connect() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute('''UPDATE tasks SET
+                title=COALESCE(%s,title), description=COALESCE(%s,description),
+                status=COALESCE(%s,status), priority=COALESCE(%s,priority),
+                due_date=CASE WHEN %s THEN %s::date ELSE due_date END
+                WHERE id=%s RETURNING id, title, description, status, priority, due_date''',
+                (data.get('title'), data.get('description'), status, priority,
+                 'due_date' in data, data.get('due_date') or None, task_id))
+            row = cur.fetchone()
+    if row is None:
+        return jsonify(error='Tache introuvable'), 404
+    if row['due_date']:
+        row['due_date'] = row['due_date'].isoformat()
+    return jsonify(row)
+
+
+@app.delete('/api/tasks/<int:task_id>')
+def delete_task(task_id):
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute('DELETE FROM tasks WHERE id=%s', (task_id,))
+            deleted = cur.rowcount
+    return ('', 204) if deleted else (jsonify(error='Tache introuvable'), 404)
+
+
+if __name__ == '__main__':
+    init_db()
+    app.run(host='0.0.0.0', port=5000)
