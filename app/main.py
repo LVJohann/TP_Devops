@@ -62,3 +62,29 @@ def status():
         services["postgres"] = "down"
     overall = "ok" if all(s == "ok" for s in services.values()) else "degraded"
     return {"status": overall, "version": APP_VERSION, "pod": os.getenv("HOSTNAME"), "services": services}
+
+
+
+def connect():
+    return psycopg2.connect(host=DB_HOST, dbname=DB_NAME, user=DB_USER, password=DB_PASSWORD, connect_timeout=3)
+
+
+def init_db():
+    for attempt in range(20):
+        try:
+            with connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""CREATE TABLE IF NOT EXISTS tasks (
+                        id SERIAL PRIMARY KEY,
+                        title VARCHAR(200) NOT NULL,
+                        description TEXT DEFAULT '',
+                        status VARCHAR(30) NOT NULL DEFAULT 'A faire',
+                        priority VARCHAR(20) NOT NULL DEFAULT 'Normale',
+                        due_date DATE
+                    )""")
+            return
+        except psycopg2.OperationalError:
+            if attempt == 19:
+                raise
+            time.sleep(2)
+
