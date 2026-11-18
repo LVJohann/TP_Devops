@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Visits — Tableau de bord</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <h1>Visits</h1>
+    </div>
+    <span id="version" class="badge">version …</span>
+  </header>
+
+  <main class="grid">
+    <!-- Fonctionnalité 1 : compteur de visites -->
+    <section class="card" aria-labelledby="counter-title">
+      <div class="card-head">
+        <h2 id="counter-title"><span class="step">1</span>Compteur de visites</h2>
+        <span class="hint">Redis</span>
+      </div>
+      <p class="big-number" id="visits-count">—</p>
+      <div class="actions">
+        <button id="visit-btn" class="btn primary" type="button">Enregistrer une visite</button>
+        <button id="burst-btn" class="btn" type="button" title="Envoie 10 visites d'affilée pour observer la répartition entre les pods">×10</button>
+      </div>
+      <p class="meta">Dernière réponse servie par <code id="last-pod">—</code></p>
+      <h3>Pods ayant répondu pendant cette session</h3>
+      <ul id="pods" class="pods"><li class="empty">Aucun pour l'instant</li></ul>
+      <p class="error" id="visit-error" role="alert" hidden></p>
+    </section>
+
+    <!-- Fonctionnalité 3 : état des services -->
+    <section class="card" aria-labelledby="status-title">
+      <div class="card-head">
+        <h2 id="status-title"><span class="step">3</span>État des services</h2>
+        <span class="hint" id="status-updated">—</span>
+      </div>
+      <ul class="services" id="services">
+        <li data-service="api"><span class="dot"></span><span class="name">API FastAPI</span><span class="state">…</span></li>
+        <li data-service="redis"><span class="dot"></span><span class="name">Redis (compteur)</span><span class="state">…</span></li>
+        <li data-service="postgres"><span class="dot"></span><span class="name">PostgreSQL (historique)</span><span class="state">…</span></li>
+      </ul>
+      <p class="overall" id="overall"></p>
+      <div class="actions">
+        <button id="status-btn" class="btn" type="button">Vérifier maintenant</button>
+        <span class="hint">Actualisation automatique toutes les 10 s</span>
+      </div>
+    </section>
+
+    <!-- Fonctionnalité 2 : historique des visites -->
+    <section class="card wide" aria-labelledby="history-title">
+      <div class="card-head">
+        <h2 id="history-title"><span class="step">2</span>Historique des visites</h2>
+        <div class="controls">
+          <label for="limit">Afficher</label>
+          <select id="limit">
+            <option>10</option>
+            <option selected>20</option>
+            <option>50</option>
+            <option>100</option>
+          </select>
+          <button id="history-btn" class="btn" type="button">Rafraîchir</button>
+        </div>
+      </div>
+      <p class="meta"><strong id="history-total">—</strong> visites enregistrées dans PostgreSQL</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">N°</th><th scope="col">Date et heure</th><th scope="col">Il y a</th></tr>
+          </thead>
+          <tbody id="history-body">
+            <tr><td colspan="3" class="empty">Chargement…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="error" id="history-error" role="alert" hidden></p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    Frontend nginx → <code>/api/*</code> → API FastAPI → Redis + PostgreSQL ·
+    <a href="/api/docs" target="_blank" rel="noopener">Documentation de l'API</a>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

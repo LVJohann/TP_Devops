@@ -1,0 +1,2 @@
+# Fins de ligne LF partout (Linux, WSL et Windows partagent le même dépôt)
+* text=auto eol=lf

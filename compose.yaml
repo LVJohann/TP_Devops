@@ -1,0 +1,53 @@
+services:
+  frontend:
+    build: ./frontend              # nginx + fichiers statiques (frontend/)
+    image: visits-frontend:1.0
+    ports:
+      - "8080:8080"                # interface web : http://localhost:8080
+    environment:
+      API_URL: http://api:8000     # nginx relaie /api/* vers ce service
+    depends_on:
+      api:
+        condition: service_started
+        restart: true              # redémarre nginx si l'API est recréée (nouvelle IP)
+    restart: unless-stopped
+
+  api:
+    build: .                       # construit depuis le Dockerfile
+    image: visits-api:1.0
+    ports:
+      - "8000:8000"                # hôte:conteneur
+    environment:
+      REDIS_HOST: cache
+      DATABASE_URL: postgresql://app:${DB_PASSWORD:-app}@db:5432/visits
+      APP_VERSION: "1.0-compose"
+    depends_on:
+      db:
+        condition: service_healthy # attend que Postgres soit prêt
+      cache:
+        condition: service_started
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-app}
+      POSTGRES_DB: visits
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d visits"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  cache:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+
+volumes:
+  pgdata:
+  redisdata:
