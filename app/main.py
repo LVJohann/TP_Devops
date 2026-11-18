@@ -15,7 +15,8 @@ REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://app:app@localhost:5432/visits")
 APP_VERSION = os.getenv("APP_VERSION", "dev")
 
-REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+# Pas « REDIS_PORT » : Kubernetes injecte REDIS_PORT=tcp://<ip>:6379 pour le Service « redis ».
+REDIS_PORT = int(os.getenv("REDIS_TCP_PORT", "6379"))
 
 r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True, socket_connect_timeout=2)
 

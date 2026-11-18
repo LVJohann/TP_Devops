@@ -14,6 +14,7 @@ spec:
     metadata:
       labels: { app: api }
     spec:
+      enableServiceLinks: false          # pas de variables REDIS_PORT=tcp://… injectées par Kubernetes
       containers:
         - name: api
           image: taskflow-api                # tag fixé par kustomize (images:)

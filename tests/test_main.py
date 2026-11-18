@@ -52,3 +52,14 @@ def test_openapi_lists_all_features():
     paths = client.get("/openapi.json").json()["paths"]
     for path in ("/", "/visits", "/visits/count", "/status", "/tasks", "/tasks/{task_id}", "/tasks/stats", "/activity"):
         assert path in paths
+
+
+def test_starts_with_kubernetes_service_links():
+    # Kubernetes injecte REDIS_PORT=tcp://<ip>:6379 pour un Service nommé « redis ».
+    import os
+    import subprocess
+    import sys
+
+    env = {**os.environ, "REDIS_PORT": "tcp://10.96.0.1:6379"}
+    result = subprocess.run([sys.executable, "-c", "import app.main"], env=env, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
